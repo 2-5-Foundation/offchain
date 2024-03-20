@@ -45,6 +45,8 @@ And at any point of the confirmation, the sender can stop the transaction from p
 # Technology
 
 vane is an offchain & onchain solution.
+![vane-flow](https://github.com/2A-Labs/offchain/assets/69342343/12586e6f-8e1a-4254-8e2b-4ca7a07d7081)
+
 
 ### Offchain components
 
