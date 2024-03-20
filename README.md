@@ -1,4 +1,5 @@
-# vane implementation for risk free transaction sending for web3 businesses and degens
+# vane network
+Implementation for risk free transaction sending for web3 businesses and degens
 
 ### What are we solving?
 
