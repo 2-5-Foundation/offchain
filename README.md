@@ -1,13 +1,13 @@
 # vane implementation for risk free transaction sending for web3 businesses and degens
 
-**What are we solving?**
+### What are we solving?
 
 1. Losing funds due wrong address input ( a huge pain currently in web3 as the action is not reversible after sending the transaction ).
 2. Losings funds due wrong network selection while sending the transaction.
    
    At some point the address can be correct but the choice of the network can result to loss of funds
 
-**Our Solution**
+### Our Solution
 
 vane act as a safety net for web3 users.
 
@@ -22,7 +22,7 @@ vane operate as a gurdian for the transaction. This is so needed as take for exa
 
 We want to eliminate all fear while sending transactions in web3 and to make sure users have a room to make mistakes whitout costing them a fortune.
 
-**User flow**
+### User flow
 
 1.  Initiate sending transaction by providing a wallet address ( *sender* )
 2.  A transaction data will be sent to receiver address as notification for receiver confirmation.
