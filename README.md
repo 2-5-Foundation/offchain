@@ -51,13 +51,28 @@ vane is an offchain & onchain solution.
 ### Offchain components
 
 1. **AV-layer ( Address Verification Layer )**
-
-
+    
+    - Accepts new transaction requests and put them in a queue per sender & receiver address
+    - In the transaction message queue, each transaction object is checked for its state ( Pending Confirmation -> Confirmed ).
+    - Confirmed transaction object will be propagated to the execution simulation layer
+    - Reverted transactions will be dropped from the message queue
 
 2. **Network Simulation**
 
+    - Spawn a parallel reality of the specified network chain ( Chopsticks & EthSim ( coming soon ))
+    - Send the transaction to the spawned simulated network for execution
+    - Receiver should verify that is able to control the deposited account in the chain
+    - Record the proof of attestation
+    - Propagate the transaction to network router layer
+
 3. **Network Router Layer**
+
+    - Send the transaction to the verified and attested address and network.
 
 ### Onchain component
 
 1. **Smart contract**
+
+    - Store cached value for verified , confirmed and attested transaction object
+    - Have tokens for incentivizing relayers
+    - Wallet partnership revenue integration
