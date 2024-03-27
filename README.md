@@ -77,3 +77,22 @@ vane is an offchain & onchain solution.
     - Store cached value for verified , confirmed and attested transaction object
     - Have tokens for incentivizing relayers
     - Wallet partnership revenue integration
+
+### Nonce control
+
+As transactions will be submitted by network router relayer, it is possible that the nonce it holds has already been invalidated by the target network.
+
+To mitigate this, the transaction will fetch the next valid nonce once it passes all vane checks ( address verification, simulation network execution and reciver deposited account ownership attestation) and once it is at network router relayer a new fresh nonce will be fetched and included in the submitted transaction
+
+---
+## Thesis
+
+1. Enabling transaction to every web3 user
+2. Incentivizing relayers
+3. Relayers should be light enough to run on resource constraint enviroments , i.e browsers, mobile.
+4. Incentives should be in vane native token and tokens in vane revenue treasury , eg ETH, DOT, Stablecoins, SOL, Parachains tokens, etc..
+5. Vane should fasciliate business integration in the following areas;
+
+    - Mobile money integration for onramp and offramp
+    - Business distribution channels
+    - Enabling online checkout with crypto and fiat

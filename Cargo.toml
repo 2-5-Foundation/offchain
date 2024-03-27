@@ -1,10 +1,32 @@
-workspace = { members = ["av-layer", "network-relayer-layer", "primitives"] }
-[package]
+[workspace]
+members =["av-layer", "network-relayer-layer", "primitives"]
+resolver = "2"
+
+[workspace.package]
+authors = [ "MrishoLukamba@vane-labs" ]
 name = "vane-offchain"
 version = "0.1.0"
 edition = "2021"
-
+repository = ""
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[workspace.dependencies]
+
+#Local
+primitives = { path = "primitives"}
+#===============================================================================
+parity-scale-codec = { version = "3.6.9", default-features = false, features = [
+  "std","derive"
+] }
+async-trait = "0.1.78"
 clap = "4.5.3"
+flume = "0.11.0"
+sp-rpc = "29.0.0"
+subxt = "0.35.0"
+tokio = "1.36.0"
+tower = "0.4.13"
+jsonrpsee = { version = "0.16.2", features = ["client-core", "macros", "server"] }
+serde = { version = "1.0.195", features = ["derive"] }
+chrono = "0.4"
+anyhow = { version = "1.0.81", default-features = false }
+

@@ -6,3 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { workspace = true}
+primitives = {workspace = true}
+async-trait = { workspace = true }
+jsonrpsee = { workspace = true }
+anyhow = {workspace = true}
