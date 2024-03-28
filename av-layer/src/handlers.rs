@@ -1,11 +1,22 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::cell::RefCell;
+use btree_slab::BTreeMap;
 
+use crate::traits::*;
 
-#[derive(Encode, Decode)]
-pub struct TxSubmissionHandler {}
+/// A mock database storing each address to the transactions each having a key
+/// `address` ===> `tx_id`=====> `Vec<u8>`
+pub struct MockDB(pub HashMap<String,BTreeMap<String,Vec<u8>>>);
 
-#[derive[Encode, Decode]]
+pub struct TxSubmissionHandler {
+    db: Rc<RefCell<MockDB>>
+}
+
 pub struct TxConfirmationHandler {}
 
-#[derive(Encode, Decode)]
 pub struct ToNetworkRouterHandler {}
+
+
+// ======================================================================
 

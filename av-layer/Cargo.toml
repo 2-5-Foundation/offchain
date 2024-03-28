@@ -11,3 +11,4 @@ primitives = {workspace = true}
 async-trait = { workspace = true }
 jsonrpsee = { workspace = true }
 anyhow = {workspace = true}
+btree-slab = { workspace = true}

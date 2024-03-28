@@ -1,17 +1,16 @@
-use chrono;
-use parity_scale_codec::{Decode,Encode};
-use anyhow::{Result};
-
+use anyhow::Result;
+use parity_scale_codec::{Decode, Encode};
+use serde::{Serialize,Deserialize};
 pub use common::*;
 
 pub mod common {
     use super::*;
     /// The transaction object which all operations will be applied upon
-    /// `call`: encoded transaction function call 
+    /// `call`: encoded transaction function call
     /// `network`: network to which the transaction will be submitted to
     /// `lifetime`: maximum period of time in minutes should this transaction be valid on confirmation phase
     /// `multi_id`: The computed address from receiver and sender, this should be kept hidden as it will be used for confirmation
-    #[derive(Debug, Encode, Decode, Clone)]
+    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
     pub struct TxObject {
         tx_id: String,
         pub call: Vec<u8>,
@@ -21,16 +20,16 @@ pub mod common {
         confirmation_status: ConfirmationStatus,
         pub network: BlockchainNetwork,
         pub lifetime: Option<u8>,
-        //submitted_time: 
-        pub lifetime_status: LifetimeStatus
+        //submitted_time:
+        pub lifetime_status: LifetimeStatus,
     }
 
-    #[derive(Debug, Encode, Decode, Clone)]
+    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
     pub enum ConfirmationStatus {
         WaitingForReceiver,
         WaitingForSender,
         Accepted,
-        Rejected
+        Rejected,
     }
 
     impl From<TxObject> for TxConfirmationObject {
@@ -39,26 +38,26 @@ pub mod common {
                 tx_id: value.tx_id,
                 call: value.call,
                 receiver_sig: None,
-                sender_sig: None
+                sender_sig: None,
             }
         }
     }
 
-
-    #[derive(Debug, Encode, Decode, Clone)]
+    /// Object to be propagated to network simulator and router layer
+    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
     pub struct TxSimulationObject {
         tx_id: String,
         call: Vec<u8>,
-        network: BlockchainNetwork
+        network: BlockchainNetwork,
     }
 
     /// Struct to be sent in the network for confirmation from sender and receiver
-    #[derive(Debug, Encode, Decode, Clone)]
+    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
     pub struct TxConfirmationObject {
         tx_id: String,
         call: Vec<u8>,
         receiver_sig: Option<Vec<u8>>,
-        sender_sig: Option<Vec<u8>>
+        sender_sig: Option<Vec<u8>>,
     }
 
     impl TxConfirmationObject {
@@ -68,14 +67,14 @@ pub mod common {
         }
     }
 
-    #[derive(Debug, Encode, Decode, Clone)]
-    pub enum LifetimeStatus{
+    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
+    pub enum LifetimeStatus {
         Valid,
-        Invalid
+        Invalid,
     }
 
     /// Supported networks
-    #[derive(Debug, Encode, Decode, Clone)]
+    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
     pub enum BlockchainNetwork {
         Polkadot,
         Kusama,
@@ -84,6 +83,6 @@ pub mod common {
         Ethereum,
         Optimism,
         Arbitrum,
-        Solana
+        Solana,
     }
 }

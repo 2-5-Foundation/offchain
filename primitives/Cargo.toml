@@ -10,3 +10,4 @@ subxt = {workspace = true}
 chrono = {workspace = true}
 parity-scale-codec = { workspace = true }
 anyhow = {workspace = true }
+serde = { worskspace = true }

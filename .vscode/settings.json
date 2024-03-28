@@ -1,6 +1,7 @@
 {
     "rust-analyzer.linkedProjects": [
         "./primitives/Cargo.toml",
+        "./primitives/Cargo.toml",
         "./primitives/Cargo.toml"
     ],
     "workbench.colorCustomizations": {
