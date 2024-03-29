@@ -1,18 +1,18 @@
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use clap::Parser;
 use anyhow::Ok;
+use clap::Parser;
 use jsonrpsee::core::{async_trait, client::Subscription};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{Server, ServerBuilder, SubscriptionSink};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
+use slab::Slab;
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 mod handlers;
 mod traits;
 
-use btree_slab::BTreeMap;
 use handlers::MockDB;
 use handlers::TransactionHandler;
 use tokio::sync::Mutex;
@@ -32,14 +32,19 @@ struct AvLayerServerCli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     let args = AvLayerServerCli::parse();
     // Initialise the database
-    let mut mock_db = HashMap::new();
-    mock_db.insert(String::new(), BTreeMap::new());
+    let mut mock_db_transactions = HashMap::new();
+    mock_db_transactions.insert(String::new(), Slab::<Vec<u8>>::new());
+
+    let mut mock_db_multi_ids = HashMap::new();
+    mock_db_multi_ids.insert(String::new(), Slab::<String>::new());
 
     let rpc_handler = TransactionHandler {
-        db: Arc::new(Mutex::new(MockDB(mock_db))),
+        db: Arc::new(Mutex::new(MockDB{
+            transactions: mock_db_transactions, 
+            multi_ids: mock_db_multi_ids
+        })),
     };
     // Initialize the server
     tokio::spawn(async { run_rpc_server(rpc_handler, args.url).await });
@@ -49,7 +54,10 @@ async fn main() -> anyhow::Result<()> {
 
 // /// Handle client
 // async fn
-async fn run_rpc_server(rpc_handler: TransactionHandler, url: String) -> anyhow::Result<SocketAddr> {
+async fn run_rpc_server(
+    rpc_handler: TransactionHandler,
+    url: String,
+) -> anyhow::Result<SocketAddr> {
     let server_builder = ServerBuilder::new();
 
     let server = server_builder.build(url).await?;

@@ -33,4 +33,4 @@ serde = { version = "1.0.195", features = ["derive"] }
 chrono = "0.4"
 anyhow = { version = "1.0.81", default-features = false }
 btree-slab = "0.6.1"
-
+slab = "0.4.9"
