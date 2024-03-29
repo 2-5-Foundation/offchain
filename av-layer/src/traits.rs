@@ -1,11 +1,11 @@
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use primitives::*;
-use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::types::{ErrorObjectOwned, SubscriptionResult};
 use jsonrpsee::ws_client::WsClientBuilder;
 
 /// Submssion of the transaction object
 #[rpc(server, client, namespace = "transaction_submission" )]
-pub trait TransactionServer {
+pub trait Transaction {
 
     /// Takes in transaction function `call`, `sender address` and `receiver address`
     /// A transaction object will be built based on the params and the object will be subjected for confirmation
@@ -20,7 +20,7 @@ pub trait TransactionServer {
 /// Handling confirmation of transaction from receiver and sender
 /// A websocket connection
 #[rpc(server, client, namespace = "confirmation" )]
-pub trait TransactionConfirmationServer {
+pub trait TransactionConfirmation {
 
     /// Subscription to start listening to any upcoming confirmation request
     /// returns `Vec<TxConfirmationObject>`
@@ -29,12 +29,12 @@ pub trait TransactionConfirmationServer {
 
     /// Calling this function subscribes
     /// returns `tx_id` for tracking 
-    #[subscription(name = "receiverConfirm", unsubscribe = "receiver_confirm", item = String )]
+    #[subscription(name = "receiverConfirm", unsubscribe = "receiver_confirm_unsub", item = String )]
     fn receiver_confirmation(&self, signature: Vec<u8>);
 
     /// Calling this function subscribes
     /// returns `tx_id` for tracking 
-    #[subscription(name = "senderConfirm",unsubscribe = "sender_confirm", item = String)]
+    #[subscription(name = "senderConfirm",unsubscribe = "sender_confirm_unsub", item = String)]
     fn sender_confirmation(&self, signature: Vec<u8>);
 
 }
