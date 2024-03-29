@@ -1,7 +1,7 @@
 use anyhow::Result;
-use parity_scale_codec::{Decode, Encode};
-use serde::{Serialize,Deserialize};
 pub use common::*;
+use parity_scale_codec::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 
 pub mod common {
     use super::*;
@@ -10,7 +10,7 @@ pub mod common {
     /// `network`: network to which the transaction will be submitted to
     /// `lifetime`: maximum period of time in minutes should this transaction be valid on confirmation phase
     /// `multi_id`: The computed address from receiver and sender, this should be kept hidden as it will be used for confirmation
-    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
     pub struct TxObject {
         tx_id: String,
         pub call: Vec<u8>,
@@ -24,7 +24,7 @@ pub mod common {
         pub lifetime_status: LifetimeStatus,
     }
 
-    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
     pub enum ConfirmationStatus {
         WaitingForReceiver,
         WaitingForSender,
@@ -44,7 +44,7 @@ pub mod common {
     }
 
     /// Object to be propagated to network simulator and router layer
-    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
     pub struct TxSimulationObject {
         tx_id: String,
         call: Vec<u8>,
@@ -52,7 +52,7 @@ pub mod common {
     }
 
     /// Struct to be sent in the network for confirmation from sender and receiver
-    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
     pub struct TxConfirmationObject {
         tx_id: String,
         call: Vec<u8>,
@@ -67,14 +67,14 @@ pub mod common {
         }
     }
 
-    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
     pub enum LifetimeStatus {
         Valid,
         Invalid,
     }
 
     /// Supported networks
-    #[derive(Debug, Encode, Decode, Clone,Serialize,Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
     pub enum BlockchainNetwork {
         Polkadot,
         Kusama,

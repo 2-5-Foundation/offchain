@@ -12,3 +12,4 @@ async-trait = { workspace = true }
 jsonrpsee = { workspace = true }
 anyhow = {workspace = true}
 btree-slab = { workspace = true}
+clap = { workspace = true, features = ["derive"] }
