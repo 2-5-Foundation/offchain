@@ -15,3 +15,9 @@ btree-slab = { workspace = true}
 clap = { workspace = true, features = ["derive"] }
 slab = { workspace = true }
 parity-scale-codec = { workspace = true }
+sp-application-crypto = { workspace = true }
+frame-support = { workspace = true }
+serde = { worskspace = true }
+futures = {workspace = true}
+sp-runtime = {workspace = true}
+sp-core = { workspace = true}

@@ -5,6 +5,7 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{Server, ServerBuilder, SubscriptionSink};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
+use primitives::TxConfirmationObject;
 use slab::Slab;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -30,9 +31,14 @@ struct AvLayerServerCli {
     url: String,
 }
 
+pub struct ServerProfile {
+    name: String,
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = AvLayerServerCli::parse();
+    //let args = AvLayerServerCli::parse();
     // Initialise the database
     let mut mock_db_transactions = HashMap::new();
     mock_db_transactions.insert(String::new(), Slab::<Vec<u8>>::new());
@@ -40,14 +46,19 @@ async fn main() -> anyhow::Result<()> {
     let mut mock_db_multi_ids = HashMap::new();
     mock_db_multi_ids.insert(String::new(), Slab::<String>::new());
 
+    let confirmation = HashMap::<String, Vec<u8>>::new();
+
     let rpc_handler = TransactionHandler {
-        db: Arc::new(Mutex::new(MockDB{
-            transactions: mock_db_transactions, 
-            multi_ids: mock_db_multi_ids
+        db: Arc::new(Mutex::new(MockDB {
+            transactions: mock_db_transactions,
+            multi_ids: mock_db_multi_ids,
+            confirmation,
         })),
     };
+    println!("Starting server");
+
     // Initialize the server
-    tokio::spawn(async { run_rpc_server(rpc_handler, args.url).await });
+    run_rpc_server(rpc_handler, "127.0.0.1:8000".to_owned()).await?;
 
     Ok(())
 }
@@ -67,7 +78,10 @@ async fn run_rpc_server(
 
     // In this example we don't care about doing shutdown so let's it run forever.
     // You may use the `ServerHandle` to shut it down or manage it yourself.
-    tokio::spawn(async { handle });
+
+    while !handle.is_stopped() {
+        tokio::spawn(handle.clone().stopped());
+    }
 
     Ok(addr)
 }

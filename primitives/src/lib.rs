@@ -2,8 +2,11 @@ use anyhow::Result;
 pub use common::*;
 use parity_scale_codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
+use frame_support::{Twox64Concat};
 
 pub mod common {
+    use frame_support::StorageHasher;
+
     use super::*;
     /// The transaction object which all operations will be applied upon
     /// `call`: encoded transaction function call
@@ -17,17 +20,42 @@ pub mod common {
         pub sender_address: String,
         pub receiver_address: String,
         multi_id: String,
-        confirmation_status: ConfirmationStatus,
         pub network: BlockchainNetwork,
         pub lifetime: Option<u8>,
         //submitted_time:
         pub lifetime_status: LifetimeStatus,
     }
 
-    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
+    impl TxObject {
+        pub fn new(call: Vec<u8>, sender_address: String, receiver_address: String, network: BlockchainNetwork) -> Self {
+            let tx_id = Twox64Concat::hash(&call);
+            let tx_id = String::from_utf8(tx_id).expect("Failed to convert tx id from bytes");
+
+            let multi_id = Twox64Concat::hash(format!{"{}{}VANEMULTIID",sender_address,receiver_address}.as_bytes());
+            let multi_id = String::from_utf8(multi_id).expect("Failed to generate multi id");
+
+            Self {
+                tx_id,
+                call,
+                sender_address,
+                receiver_address,
+                multi_id,
+                network,
+                lifetime: None,
+                lifetime_status: LifetimeStatus::Valid,
+            }
+        }
+
+        pub fn get_multi_id(&self) -> String {
+            self.multi_id.clone()
+        }
+    }
+
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize,PartialEq, Eq)]
     pub enum ConfirmationStatus {
         WaitingForReceiver,
         WaitingForSender,
+        Ready,
         Accepted,
         Rejected,
     }
@@ -39,6 +67,8 @@ pub mod common {
                 call: value.call,
                 receiver_sig: None,
                 sender_sig: None,
+                confirmation_status: ConfirmationStatus::WaitingForReceiver,
+                network: value.network
             }
         }
     }
@@ -48,23 +78,49 @@ pub mod common {
     pub struct TxSimulationObject {
         tx_id: String,
         call: Vec<u8>,
+        status: ConfirmationStatus,
         network: BlockchainNetwork,
     }
 
     /// Struct to be sent in the network for confirmation from sender and receiver
-    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize, PartialEq, Eq)]
     pub struct TxConfirmationObject {
         tx_id: String,
-        call: Vec<u8>,
+        pub call: Vec<u8>,
+        confirmation_status: ConfirmationStatus,
         receiver_sig: Option<Vec<u8>>,
         sender_sig: Option<Vec<u8>>,
+        network: BlockchainNetwork
+    }
+
+    impl From<TxConfirmationObject> for TxSimulationObject {
+        fn from(value: TxConfirmationObject) -> Self {
+            Self {
+                tx_id: value.tx_id,
+                call: value.call,
+                status: value.confirmation_status,
+                network: value.network,
+            }
+        }
     }
 
     impl TxConfirmationObject {
-        pub fn verify_receiver(&self) -> Result<bool> {
-            // TODO !
-            Ok(false)
+        pub fn update_confirmation_status(&mut self, status: ConfirmationStatus){
+            self.confirmation_status = status
         }
+
+        pub fn set_receiver_sig(&mut self, receiver_sig: Vec<u8>){
+            self.receiver_sig = Some(receiver_sig)
+        }
+
+        pub fn set_sender_sig(&mut self, sender_sig: Vec<u8>){
+            self.sender_sig = Some(sender_sig)
+        }
+
+        pub fn get_confirmation_status(&self) -> ConfirmationStatus {
+            self.confirmation_status.clone()
+        }
+
     }
 
     #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
@@ -74,7 +130,7 @@ pub mod common {
     }
 
     /// Supported networks
-    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize,PartialEq, Eq)]
     pub enum BlockchainNetwork {
         Polkadot,
         Kusama,

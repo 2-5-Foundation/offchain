@@ -34,3 +34,8 @@ chrono = "0.4"
 anyhow = { version = "1.0.81", default-features = false }
 btree-slab = "0.6.1"
 slab = "0.4.9"
+sp-application-crypto = "33.0.0"
+frame-support = "31.0.0"
+futures = "0.3.30"
+sp-runtime = "34.0.0"
+sp-core = "31.0.0"

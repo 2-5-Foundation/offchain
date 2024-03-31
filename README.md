@@ -78,6 +78,8 @@ vane is an offchain & onchain solution.
     - Have tokens for incentivizing relayers
     - Wallet partnership revenue integration
 
+### Transaction pipeline
+
 ### Nonce control
 
 As transactions will be submitted by network router relayer, it is possible that the nonce it holds has already been invalidated by the target network.

@@ -2,11 +2,12 @@ use jsonrpsee::types::{ErrorObjectOwned, SubscriptionResult};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use primitives::*;
+use slab::Slab;
 
 /// Submssion of the transaction object
 /// Handling confirmation of transaction from receiver and sender
 /// A websocket connection
-#[rpc(server, client, namespace = "transaction_submission")]
+#[rpc(server, client)]
 pub trait Transaction {
     /// Takes in transaction function `call`, `sender address` and `receiver address`
     /// A transaction object will be built based on the params and the object will be subjected for confirmation
@@ -23,18 +24,30 @@ pub trait Transaction {
 
     /// Subscription to start listening to any upcoming confirmation request
     /// returns `Vec<TxConfirmationObject>`
-    #[subscription(name = "subscribe", item = Vec<TxConfirmationObject>)]
-    fn subscribe_confirmation(&self, address: String);
+    #[method(name = "subscribe")]
+    async fn subscribe_confirmation(&self, address: String) -> RpcResult<Option<Vec<TxObject>>>;
 
     /// Calling this function subscribes
     /// returns `tx_id` for tracking
-    #[subscription(name = "receiverConfirm", unsubscribe = "receiver_confirm_unsub", item = String )]
-    fn receiver_confirmation(&self, signature: Vec<u8>);
+    #[method(name = "receiverConfirm")]
+    async fn receiver_confirmation(
+        &self,
+        address: String,
+        multi_id: String,
+        signature: Vec<u8>,
+        network: BlockchainNetwork,
+    ) -> RpcResult<()>;
 
     /// Calling this function subscribes
     /// returns `tx_id` for tracking
-    #[subscription(name = "senderConfirm",unsubscribe = "sender_confirm_unsub", item = String)]
-    fn sender_confirmation(&self, signature: Vec<u8>);
+    #[method(name = "senderConfirm")]
+    async fn sender_confirmation(
+        &self,
+        address: String,
+        multi_id: String,
+        signature: Vec<u8>,
+        network: BlockchainNetwork,
+    ) -> RpcResult<()>;
 }
 
 // /// Handling confirmation of transaction from receiver and sender
