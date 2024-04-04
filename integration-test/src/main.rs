@@ -12,6 +12,40 @@
 //! 7. Sender confirmation should change the state of the transaction to accepted and ready to be propagated to network router layer
 //! 
 
+use jsonrpsee::core::client::{SubscriptionClientT, ClientT};
+use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use primitives::{TxConfirmationObject,TxObject, VaneMultiAddress};
+use subxt::{PolkadotConfig,OnlineClient};
+use sp_core::ecdsa::{Public as ecdsaPublic, Signature as ECDSASignature};
+use sp_core::ed25519::{Public as ed25519Public, Signature as Ed25519Signature};
+use sp_core::sr25519::{Public as sr25519Public, Pair as sr25519Pair, Signature as Sr25519Signature};
+use sp_core::{Pair, H256};
+use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::{MultiSignature, MultiSigner};
+use subxt_signer::sr25519::dev;
+#[subxt::subxt(runtime_metadata_path = "polkadot.scale")]
+pub mod polkadot{}
 
-fn main() {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // generate accounts
+    // let alicePair = sr25519Pair::from_string("//Alice", None).expect("Failed to generate key pair");
+    // let bobPair = sr25519Pair::from_string("//Bob", None).expect("Failed to generate key pair");
+    let alice = dev::alice().public_key();
+    //let bob:VaneMultiAddress<u128,u32> = VaneMultiAddress::Address32(dev::bob().public_key().into());
+    // construct a transfer tx
+    //let transfer_call = polkadot::tx().balances().transfer_keep_alive(bob, 10_000);
+    // send to vane av-layer
+    let av_client = WsClientBuilder::default().build("127.0.0.1:8000").await?;
+    // listen to updates
+    //let receiver_tx_updates = av_client.request("subscribe",vec![bob]);
+    //let sender_tx_updates = av_client.subscribe(subscribe_method, params, unsubscribe_method)
+    // receiver confirmation
+
+    // fetch the tx and confirm the state
+
+    // sender confirmation
+
+    // propagating the confirmed tx to network-simulation and routing layer
+    Ok(())
 }

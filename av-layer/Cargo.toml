@@ -19,5 +19,6 @@ sp-application-crypto = { workspace = true }
 frame-support = { workspace = true }
 serde = { worskspace = true }
 futures = {workspace = true}
-sp-runtime = {workspace = true}
+sp-runtime = {workspace = true, features = ["serde"]}
 sp-core = { workspace = true}
+

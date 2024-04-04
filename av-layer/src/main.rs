@@ -1,12 +1,6 @@
 use anyhow::Ok;
 use clap::Parser;
-use jsonrpsee::core::{async_trait, client::Subscription};
-use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{Server, ServerBuilder, SubscriptionSink};
-use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::ws_client::WsClientBuilder;
-use primitives::TxConfirmationObject;
-use slab::Slab;
+use jsonrpsee::server::ServerBuilder;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -40,13 +34,10 @@ pub struct ServerProfile {
 async fn main() -> anyhow::Result<()> {
     //let args = AvLayerServerCli::parse();
     // Initialise the database
-    let mut mock_db_transactions = HashMap::new();
-    mock_db_transactions.insert(String::new(), Slab::<Vec<u8>>::new());
+    let mock_db_transactions = HashMap::new();
+    let mock_db_multi_ids = HashMap::new();
 
-    let mut mock_db_multi_ids = HashMap::new();
-    mock_db_multi_ids.insert(String::new(), Slab::<String>::new());
-
-    let confirmation = HashMap::<String, Vec<u8>>::new();
+    let confirmation = HashMap::new();
 
     let rpc_handler = TransactionHandler {
         db: Arc::new(Mutex::new(MockDB {

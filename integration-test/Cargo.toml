@@ -9,3 +9,14 @@ repository.workspace = true
 
 [dependencies]
 av-layer = { workspace = true }
+primitives = {workspace = true}
+parity-scale-codec = { workspace = true }
+sp-application-crypto = { workspace = true }
+jsonrpsee = { workspace = true }
+tokio = { workspace = true}
+anyhow = {workspace = true}
+subxt = { workspace = true }
+sp-core ={ workspace = true }
+sp-runtime = { workspace = true}
+subxt-cli = {workspace = true}
+subxt-signer = {workspace = true}

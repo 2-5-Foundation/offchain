@@ -1,35 +1,34 @@
 use crate::traits::*;
 use frame_support::{Blake2_128, StorageHasher};
 use futures::stream::{FuturesUnordered, StreamExt};
-use jsonrpsee::core::async_trait;
+use jsonrpsee::core::{async_trait, SubscriptionResult};
 use jsonrpsee::core::{Error::Custom, RpcResult};
-use jsonrpsee::types::SubscriptionResult;
-use jsonrpsee::SubscriptionSink;
+use jsonrpsee::{PendingSubscriptionSink, Subscription, SubscriptionMessage, SubscriptionSink};
 use parity_scale_codec::{Decode, Encode};
-use primitives::{BlockchainNetwork, ConfirmationStatus};
-use primitives::TxConfirmationObject;
-use primitives::TxObject;
-use primitives::TxSimulationObject;
+use primitives::{BlockchainNetwork, ConfirmationStatus, TxConfirmationObject, TxObject, TxSimulationObject, VaneMultiAddress};
 use slab::Slab;
 use sp_core::ecdsa::{Public as ecdsaPublic, Signature as ECDSASignature};
 use sp_core::ed25519::{Public as ed25519Public, Signature as Ed25519Signature};
 use sp_core::sr25519::{Public as sr25519Public, Signature as Sr25519Signature};
 use sp_core::H256;
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_runtime::{MultiSignature, MultiSigner};
+use sp_runtime::{MultiAddress, MultiSignature, MultiSigner};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
+
+/// Types for easier code navigation
+pub type MultiId  = MultiAddress<u128,()>;
 /// A mock database storing each address to the transactions each having a key
 /// `address` ===> `multi_id`=====> `Vec<u8>`
 pub struct MockDB {
-    // Map of multi_id account to array of transaction related to the multi_id
-    pub transactions: HashMap<String, Slab<Vec<u8>>>,
+    // Map of multi_id account to encoded transaction related to the multi_id
+    pub transactions: HashMap<MultiId, Vec<u8>>,
     // Map of account id per user ( sender | receiver ) to array of multi_id ( indicating pending transactions)
-    pub multi_ids: HashMap<String, Slab<String>>,
+    pub multi_ids: HashMap<MultiAddress<u128,()>, Vec<MultiId>>,
     // Map to store confirmation phase of transactions
     // `multi-id` to `TxConfrimationObject`
-    pub confirmation: HashMap<String, Vec<u8>>,
+    pub confirmation: HashMap<MultiId, Vec<u8>>,
 }
 
 /// Keeptrack of subscribed clients
@@ -43,37 +42,27 @@ pub struct TransactionHandler {
 
 impl TransactionHandler {
     // Returning transaction data id stored in the database
-    pub async fn set_transaction_data(&self, address: String, multi_id: String, data: TxObject) {
+    pub async fn set_transaction_data(&self, address: MultiAddress<u128, ()>, multi_id: MultiId, data: TxObject) {
         let mut db = self.db.lock().await;
-        if db.transactions.contains_key(&multi_id) {
-            let db = db.transactions.get_mut(&multi_id).expect(&format!(
-                "Cannot find transaction data with the key {}",
-                &address
-            ));
-            db.insert(data.encode());
-            // No need to add multi to the account storage as the key was present
-        }
+       
+        let mut inner_db_multi_ids = Vec::<MultiAddress<u128,()>>::new();
 
-        let mut inner_db_transactions = Slab::<Vec<u8>>::new();
-        let mut inner_db_multi_ids = Slab::<String>::new();
+        inner_db_multi_ids.push(multi_id.clone());
 
-        inner_db_transactions.insert(data.encode());
-        inner_db_multi_ids.insert(multi_id.clone());
-
-        db.transactions.insert(address, inner_db_transactions);
+        db.transactions.insert(address, data.encode());
         db.multi_ids.insert(multi_id, inner_db_multi_ids);
     }
 
     pub async fn set_confirmation_transaction_data(
         &self,
-        multi_id: String,
+        multi_id: MultiId,
         tx_confirmation: TxConfirmationObject,
     ) {
         let mut db = self.db.lock().await;
         db.confirmation.insert(multi_id, tx_confirmation.encode());
     }
 
-    pub async fn get_confirmation_transaction_data(&self, multi_id: String) -> Option<TxConfirmationObject> {
+    pub async fn get_confirmation_transaction_data(&self, multi_id: MultiId) -> Option<TxConfirmationObject> {
         let db = self.db.lock().await;
         if let Some(confirmation_data) = db.confirmation.get(&multi_id) {
             let tx_confirmation_object: TxConfirmationObject = Decode::decode(&mut &confirmation_data[..]).expect("Failed to decode tx confirmation object");
@@ -83,115 +72,104 @@ impl TransactionHandler {
         }
     }
 
-    pub async fn get_pending_multi_ids(&self, account: String) -> Option<Vec<String>> {
+    pub async fn get_pending_multi_ids(&self, account: MultiAddress<u128, ()>) -> Option<Vec<MultiId>> {
         let db = self.db.lock().await;
-        let mut multi_ids_vec = Vec::<String>::new();
-        if let Some(multi_ids) = db.multi_ids.get(&account) {
-            multi_ids
-                .into_iter()
-                .for_each(|item| multi_ids_vec.push(item.1.clone()));
-            Some(multi_ids_vec)
+        if let Some(multi_ids) = db.multi_ids.get(&account) {    
+            Some(multi_ids.to_owned())
         } else {
             None
         }
     }
 
-    pub async fn get_transactions(&self, multi_id: String) -> Vec<Vec<u8>> {
+    pub async fn get_transactions(&self, multi_id: MultiId) -> Option<Vec<u8>> {
         let db = self.db.lock().await;
-        let mut tx_vec = Vec::<Vec<u8>>::new();
 
-        let transactions = db.transactions.get(&multi_id).unwrap().clone();
-        transactions.into_iter().for_each(|tx| tx_vec.push(tx.1));
-        return tx_vec;
+        if let Some(transaction) = db.transactions.get(&multi_id){
+            return Some(transaction.to_owned())
+        }else{
+            None
+        }
     }
 }
 
 pub struct ToNetworkRouterHandler {}
 
-async fn process_multi_ids<T, F, Fut>(multi_ids: T, mut f: F)
-where
-    T: IntoIterator<Item = String>,
-    F: FnMut(String) -> Fut,
-    Fut: std::future::Future<Output = ()>,
-{
-    let mut futures = FuturesUnordered::new();
-
-    for multi_id in multi_ids {
-        futures.push(f(multi_id));
-    }
-
-    while let Some(_) = futures.next().await {}
-}
 
 #[async_trait]
 impl TransactionServer for TransactionHandler {
     async fn submit_transaction(
         &self,
         call: Vec<u8>,
-        sender: String,
-        receiver: String,
+        sender: VaneMultiAddress<u128,()>,
+        receiver: VaneMultiAddress<u128,()>,
     ) -> RpcResult<()> {
         // construct transaction object
         let tx_object = TxObject::new(
             call,
-            sender.clone(),
-            receiver.clone(),
+            sender.clone().into(),
+            receiver.clone().into(),
             primitives::BlockchainNetwork::Polkadot,
         );
         println!("submitting transaction and preparing for confirmation phase");
         // record the tx object to the db
         let multi_id = tx_object.get_multi_id();
         // record for sender
-        self.set_transaction_data(sender, multi_id.clone(), tx_object.clone())
+        self.set_transaction_data(sender.into(), multi_id.clone(), tx_object.clone())
             .await;
         // record for receiver
-        self.set_transaction_data(receiver, multi_id, tx_object)
+        self.set_transaction_data(receiver.into(), multi_id, tx_object)
             .await;
         Ok(())
     }
 
-    async fn get_transaction(&self, sender: String, tx_id: Option<Vec<u8>>) -> RpcResult<Vec<u8>> {
+    async fn get_transaction(&self, sender: VaneMultiAddress<u128,()>, tx_id: Option<Vec<u8>>) -> RpcResult<Vec<u8>> {
         Ok(vec![])
     }
 
-    async fn subscribe_confirmation(&self, address: String) -> RpcResult<Option<Vec<TxObject>>> {
+    async fn subscribe_confirmation(&self, pending: PendingSubscriptionSink, address: VaneMultiAddress<u128,()>) -> SubscriptionResult {
+        let sink = pending.accept().await?;
         // send all the multi_id pending
-        let multi_ids = self.get_pending_multi_ids(address).await;
+        let multi_ids = self.get_pending_multi_ids(address.into()).await;
 
-        let mut tx_object_vec = Vec::<TxObject>::new();
-
+        let mut txs_vec = Vec::<Vec<u8>>::new();
         if let Some(multi_ids) = multi_ids {
             for multi_id in multi_ids.clone() {
                 let encoded_txs = self.get_transactions(multi_id).await;
-                for encoded_tx in encoded_txs {
-                    let tx_object: TxObject = Decode::decode(&mut &encoded_tx[..])
-                        .expect("Failed to decode transaction object");
-                    tx_object_vec.push(tx_object);
+                if let Some(tx) = encoded_txs {
+                    txs_vec.push(tx)
                 }
             }
-            return Ok(Some(tx_object_vec));
+            
+            sink.send(
+                SubscriptionMessage::from_json(&txs_vec)?
+            ).await?;
         } else {
-            return Ok(None);
+            let empty_result = Vec::<Vec<u8>>::new();
+            sink.send(
+                SubscriptionMessage::from_json(&empty_result)?
+            ).await?;
         }
+
+        Ok(())
     }
 
     async fn receiver_confirmation(
         &self,
-        address: String,
-        multi_id: String,
+        address: VaneMultiAddress<u128,()>,
+        multi_id: VaneMultiAddress<u128,()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()> {
         // verify the signature and the address
         match network {
             BlockchainNetwork::Kusama | BlockchainNetwork::Polkadot => {
-                let tx_encoded = self.get_transactions(multi_id.clone()).await;
+                let tx_encoded = self.get_transactions(multi_id.clone().into()).await.ok_or(Custom("Transaction Not Found".to_string()))?;
                 // record the confirmation
                 let tx: TxObject =
-                    Decode::decode(&mut &tx_encoded[0][..]).expect("Failed to decode Tx Object");
+                    Decode::decode(&mut &tx_encoded[..]).expect("Failed to decode Tx Object");
                 let msg = tx.clone().call;
                 let sig = Sr25519Signature::from_slice(&signature)
-                    .expect("Failed to convert signature sr25519");
+                    .ok_or(Custom("Failed to convert signature sr25519".to_string()))?;
 
                 let account_bytes: [u8; 32] = address
                     .encode()
@@ -206,7 +184,7 @@ impl TransactionServer for TransactionHandler {
                     );
                     tx_confirmation_object.set_receiver_sig(signature);
                     // store the tx confirmation object
-                    self.set_confirmation_transaction_data(multi_id, tx_confirmation_object)
+                    self.set_confirmation_transaction_data(multi_id.into(), tx_confirmation_object)
                         .await
                 };
                 Ok(())
@@ -217,15 +195,15 @@ impl TransactionServer for TransactionHandler {
 
     async fn sender_confirmation(
         &self,
-        address: String,
-        multi_id: String,
+        address: VaneMultiAddress<u128,()>,
+        multi_id: VaneMultiAddress<u128,()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()> {
         
         match network {
             BlockchainNetwork::Kusama | BlockchainNetwork::Polkadot => {
-                let mut tx = self.get_confirmation_transaction_data(multi_id.clone()).await.ok_or(Custom("Confirmation data unavailable".to_string()))?;
+                let mut tx = self.get_confirmation_transaction_data(multi_id.clone().into()).await.ok_or(Custom("Confirmation data unavailable".to_string()))?;
                 // check if the if the receiver has confirmed
                 if tx.get_confirmation_status() != ConfirmationStatus::WaitingForSender {
                     return Err(Custom("Wait for receiver to confirm".to_string()))

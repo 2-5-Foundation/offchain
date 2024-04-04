@@ -14,3 +14,4 @@ serde = { worskspace = true }
 frame-support = { workspace = true }
 sp-runtime = {workspace = true}
 sp-core = { workspace = true}
+scale-info = { workspace = true }

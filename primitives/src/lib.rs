@@ -1,25 +1,24 @@
-use anyhow::Result;
 pub use common::*;
 use parity_scale_codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use frame_support::{Twox64Concat};
-
+use frame_support::Twox64Concat;
+use sp_runtime::MultiAddress;
+use frame_support::StorageHasher;
 pub mod common {
-    use frame_support::StorageHasher;
-
+    
     use super::*;
     /// The transaction object which all operations will be applied upon
     /// `call`: encoded transaction function call
     /// `network`: network to which the transaction will be submitted to
     /// `lifetime`: maximum period of time in minutes should this transaction be valid on confirmation phase
     /// `multi_id`: The computed address from receiver and sender, this should be kept hidden as it will be used for confirmation
-    #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Encode, Decode, Clone)]
     pub struct TxObject {
         tx_id: String,
         pub call: Vec<u8>,
-        pub sender_address: String,
-        pub receiver_address: String,
-        multi_id: String,
+        pub sender_address: MultiAddress<u128,()>,
+        pub receiver_address: MultiAddress<u128,()>,
+        multi_id: MultiAddress<u128,()>,
         pub network: BlockchainNetwork,
         pub lifetime: Option<u8>,
         //submitted_time:
@@ -27,13 +26,12 @@ pub mod common {
     }
 
     impl TxObject {
-        pub fn new(call: Vec<u8>, sender_address: String, receiver_address: String, network: BlockchainNetwork) -> Self {
+        pub fn new(call: Vec<u8>, sender_address: MultiAddress<u128, ()>, receiver_address: MultiAddress<u128, ()>, network: BlockchainNetwork) -> Self {
             let tx_id = Twox64Concat::hash(&call);
             let tx_id = String::from_utf8(tx_id).expect("Failed to convert tx id from bytes");
 
             let multi_id = Twox64Concat::hash(format!{"{}{}VANEMULTIID",sender_address,receiver_address}.as_bytes());
-            let multi_id = String::from_utf8(multi_id).expect("Failed to generate multi id");
-
+            let multi_id:MultiAddress<u128,()> = MultiAddress::Raw(multi_id);
             Self {
                 tx_id,
                 call,
@@ -46,7 +44,7 @@ pub mod common {
             }
         }
 
-        pub fn get_multi_id(&self) -> String {
+        pub fn get_multi_id(&self) -> MultiAddress<u128,()> {
             self.multi_id.clone()
         }
     }
@@ -140,5 +138,34 @@ pub mod common {
         Optimism,
         Arbitrum,
         Solana,
+    }
+
+    /// Account data types
+    /// This is just similar to what `MultiAddress` is but with `serde:Serialize` implemented
+    #[derive(Encode, Decode, PartialEq, Eq, Clone, scale_info::TypeInfo, serde::Serialize, serde::Deserialize)]
+    #[cfg_attr(feature = "std", derive(Hash))]
+    pub enum VaneMultiAddress<AccountId, AccountIndex> {
+        /// It's an account ID (pubkey).
+        Id(AccountId),
+        /// It's an account index.
+        Index(#[codec(compact)] AccountIndex),
+        /// It's some arbitrary raw bytes.
+        Raw(Vec<u8>),
+        /// It's a 32 byte representation.
+        Address32([u8; 32]),
+        /// Its a 20 byte representation.
+        Address20([u8; 20]),
+    }
+
+    impl From<VaneMultiAddress<u128,()>> for MultiAddress<u128,()> {
+        fn from(value: VaneMultiAddress<u128,()>) -> Self {
+           match value {
+               VaneMultiAddress::Address20(addr) => MultiAddress::Address20(addr),
+               VaneMultiAddress::Address32(addr) => MultiAddress::Address32(addr),
+               VaneMultiAddress::Id(id) => MultiAddress::Id(id),
+               VaneMultiAddress::Raw(raw) => MultiAddress::Raw(raw),
+               VaneMultiAddress::Index(index) => MultiAddress::Index(index)
+           }
+        }
     }
 }

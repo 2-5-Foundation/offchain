@@ -1,8 +1,6 @@
-use jsonrpsee::types::{ErrorObjectOwned, SubscriptionResult};
-use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use primitives::*;
-use slab::Slab;
 
 /// Submssion of the transaction object
 /// Handling confirmation of transaction from receiver and sender
@@ -15,25 +13,25 @@ pub trait Transaction {
     async fn submit_transaction(
         &self,
         call: Vec<u8>,
-        sender: String,
-        receiver: String,
+        sender: VaneMultiAddress<u128,()>,
+        receiver: VaneMultiAddress<u128,()>,
     ) -> RpcResult<()>;
 
     #[method(name = "get_transaction")]
-    async fn get_transaction(&self, sender: String, tx_id: Option<Vec<u8>>) -> RpcResult<Vec<u8>>;
+    async fn get_transaction(&self, sender: VaneMultiAddress<u128,()>, tx_id: Option<Vec<u8>>) -> RpcResult<Vec<u8>>;
 
     /// Subscription to start listening to any upcoming confirmation request
-    /// returns `Vec<TxConfirmationObject>`
-    #[method(name = "subscribe")]
-    async fn subscribe_confirmation(&self, address: String) -> RpcResult<Option<Vec<TxObject>>>;
+    /// returns `Vec<TxConfirmationObject>` in encoded format
+    #[subscription(name = "subscribe", item=Vec<Vec<u8>>)]
+    async fn subscribe_confirmation(&self, address: VaneMultiAddress<u128,()>) -> SubscriptionResult;
 
     /// Calling this function subscribes
     /// returns `tx_id` for tracking
     #[method(name = "receiverConfirm")]
     async fn receiver_confirmation(
         &self,
-        address: String,
-        multi_id: String,
+        address: VaneMultiAddress<u128,()>,
+        multi_id: VaneMultiAddress<u128,()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()>;
@@ -43,8 +41,8 @@ pub trait Transaction {
     #[method(name = "senderConfirm")]
     async fn sender_confirmation(
         &self,
-        address: String,
-        multi_id: String,
+        address: VaneMultiAddress<u128,()>,
+        multi_id: VaneMultiAddress<u128,()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()>;
