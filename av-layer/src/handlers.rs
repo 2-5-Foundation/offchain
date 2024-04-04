@@ -126,7 +126,7 @@ impl TransactionServer for TransactionHandler {
         Ok(vec![])
     }
 
-    async fn subscribe_confirmation(&self, pending: PendingSubscriptionSink, address: VaneMultiAddress<u128,()>) -> SubscriptionResult {
+    async fn subscribe_tx_confirmation(&self, pending: PendingSubscriptionSink, address: VaneMultiAddress<u128,()>) -> SubscriptionResult {
         let sink = pending.accept().await?;
         // send all the multi_id pending
         let multi_ids = self.get_pending_multi_ids(address.into()).await;

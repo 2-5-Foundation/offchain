@@ -22,8 +22,8 @@ pub trait Transaction {
 
     /// Subscription to start listening to any upcoming confirmation request
     /// returns `Vec<TxConfirmationObject>` in encoded format
-    #[subscription(name = "subscribe", item=Vec<Vec<u8>>)]
-    async fn subscribe_confirmation(&self, address: VaneMultiAddress<u128,()>) -> SubscriptionResult;
+    #[subscription(name = "subscribeTxConfirmation", item=Vec<Vec<u8>>)]
+    async fn subscribe_tx_confirmation(&self, address: VaneMultiAddress<u128,()>) -> SubscriptionResult;
 
     /// Calling this function subscribes
     /// returns `tx_id` for tracking
