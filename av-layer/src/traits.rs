@@ -13,25 +13,38 @@ pub trait Transaction {
     async fn submit_transaction(
         &self,
         call: Vec<u8>,
-        sender: VaneMultiAddress<u128,()>,
-        receiver: VaneMultiAddress<u128,()>,
+        sender: VaneMultiAddress<u128, ()>,
+        receiver: VaneMultiAddress<u128, ()>,
     ) -> RpcResult<()>;
 
     #[method(name = "get_transaction")]
-    async fn get_transaction(&self, sender: VaneMultiAddress<u128,()>, tx_id: Option<Vec<u8>>) -> RpcResult<Vec<u8>>;
+    async fn get_transaction(
+        &self,
+        sender: VaneMultiAddress<u128, ()>,
+        tx_id: Option<Vec<u8>>,
+    ) -> RpcResult<Vec<u8>>;
 
     /// Subscription to start listening to any upcoming confirmation request
     /// returns `Vec<TxConfirmationObject>` in encoded format
     #[subscription(name = "subscribeTxConfirmation", item=Vec<Vec<u8>>)]
-    async fn subscribe_tx_confirmation(&self, address: VaneMultiAddress<u128,()>) -> SubscriptionResult;
+    async fn subscribe_tx_confirmation(
+        &self,
+        address: VaneMultiAddress<u128, ()>,
+    ) -> SubscriptionResult;
 
+    /// Subscriptiom for sender to listen to incoming confirmed transactions from the receiver
+    #[subscription(name = "subscribeTxConfirmationSender", item=Vec<TxConfirmationObject>)]
+    async fn subscribe_tx_confirmation_sender(
+        &self,
+        address: VaneMultiAddress<u128, ()>,
+    ) -> SubscriptionResult;
     /// Calling this function subscribes
     /// returns `tx_id` for tracking
     #[method(name = "receiverConfirm")]
     async fn receiver_confirmation(
         &self,
-        address: VaneMultiAddress<u128,()>,
-        multi_id: VaneMultiAddress<u128,()>,
+        address: VaneMultiAddress<u128, ()>,
+        multi_id: VaneMultiAddress<u128, ()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()>;
@@ -41,20 +54,18 @@ pub trait Transaction {
     #[method(name = "senderConfirm")]
     async fn sender_confirmation(
         &self,
-        address: VaneMultiAddress<u128,()>,
-        multi_id: VaneMultiAddress<u128,()>,
+        address: VaneMultiAddress<u128, ()>,
+        multi_id: VaneMultiAddress<u128, ()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()>;
+
+    /// Handling confirmation of transaction from receiver and sender
+    /// A websocket connection
+
+    /// This should be a websocket connection to network router server
+    /// handling propagating to be simulated and
+    /// account control attestation after txn execution ( i.e depositing to the specified acount)
+    #[subscription(name = "receiveConfirmedTx", unsubscribe = "unsubReceiveConfirmedTx", item=Vec<TxSimulationObject>)]
+    async fn receive_confirmed_tx(&self) -> SubscriptionResult;
 }
-
-// /// Handling confirmation of transaction from receiver and sender
-// /// A websocket connection
-
-// /// This should be a websocket connection to network router server
-// /// handling propagating to be simulated and
-// ///  account control attestation after txn execution ( i.e depositing to the specified acount)
-// #[rpc(server, client, namespace = "network_router_feed" )]
-// pub trait ToNetworkRouterServer {
-
-// }

@@ -2,6 +2,7 @@ use anyhow::Ok;
 use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -44,6 +45,9 @@ async fn main() -> anyhow::Result<()> {
             transactions: mock_db_transactions,
             multi_ids: mock_db_multi_ids,
             confirmation,
+            reverted_transactions: HashMap::new(),
+            simulation: VecDeque::new(),
+            subscribed: Vec::new(),
         })),
     };
     println!("Starting server");

@@ -40,7 +40,7 @@ futures = "0.3.30"
 sp-runtime = "34.0.0"
 sp-core = "31.0.0"
 scale-info = { version = "2.11.1", features = ["derive","serde"]}
-
+serde_json = "1.0.116"
 # Dev Devependencies
 subxt-cli = "0.35.1"
 subxt-signer = "0.35.1"
