@@ -22,9 +22,9 @@ use sp_core::sr25519::{
 };
 use sp_core::{Pair, H256};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_runtime::{MultiSignature, MultiSigner};
+use sp_runtime::{MultiAddress, MultiSignature, MultiSigner};
 use subxt::{OnlineClient, PolkadotConfig};
-use subxt_signer::sr25519::dev;
+use subxt_signer::sr25519::{dev, Keypair};
 #[subxt::subxt(runtime_metadata_path = "polkadot.scale")]
 pub mod polkadot {}
 
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     // construct a transfer tx
     //let transfer_call = polkadot::tx().balances().transfer_keep_alive(bob, 10_000);
     // send to vane av-layer
-    let av_client = WsClientBuilder::default().build("127.0.0.1:8000").await?;
+    // let av_client =
     // listen to updates
     //let receiver_tx_updates = av_client.request("subscribe",vec![bob]);
     //let sender_tx_updates = av_client.subscribe(subscribe_method, params, unsubscribe_method)
@@ -55,3 +55,49 @@ async fn main() -> anyhow::Result<()> {
     // propagating the confirmed tx to network-simulation and routing layer
     Ok(())
 }
+
+
+pub struct PolkadotTest;
+
+impl PolkadotTest {
+    pub async fn connect() -> WsClient {
+        let client = WsClientBuilder::default()
+            .build("127.0.0.1:8000")
+            .await
+            .expect("Failed to initilise Ws");
+        client
+    }
+
+    pub async fn send_transaction(
+        sender: Keypair,
+        receiver: Keypair,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    pub async fn listen_to_incoming_tx(address: MultiAddress<u128, ()>) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    pub async fn sender_listen_confirmed_tx(sender: MultiAddress<u128, ()>) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    pub async fn receiver_tx_confirm(receiver_pair: Keypair) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    pub async fn sender_tx_confirm(sender_pair: Keypair) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    pub async fn receiver_confirmed_account_ownership() -> anyhow::Result<()> {
+        todo!()
+    }
+    
+
+}
+
+pub struct SolanaTest;
+
+pub struct EthereumTest;

@@ -125,6 +125,11 @@ impl TransactionHandler {
         db.simulation.push_front(tx_simulate.encode())
     }
 
+    pub async fn get_total_number_of_simulated_tx(&self) -> u32 {
+        let db = self.db.lock().await;
+        db.simulation.len().try_into().unwrap()
+    }
+
     pub async fn get_simulate_tx(&self) -> Option<TxSimulationObject> {
         let mut db = self.db.lock().await;
         if let Some(tx) = db.simulation.pop_front() {
@@ -177,10 +182,10 @@ impl TransactionServer for TransactionHandler {
 
     async fn get_transaction(
         &self,
-        sender: VaneMultiAddress<u128, ()>,
-        tx_id: Option<Vec<u8>>,
+        _sender: VaneMultiAddress<u128, ()>,
+        _tx_id: Option<Vec<u8>>,
     ) -> RpcResult<Vec<u8>> {
-        Ok(vec![])
+        todo!()
     }
 
     async fn subscribe_tx_confirmation(
@@ -329,9 +334,12 @@ impl TransactionServer for TransactionHandler {
 
     async fn receive_confirmed_tx(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
         let sink = pending.accept().await?;
-
         // fetch the confirmed and ready to be simulated txn
-
+        while self.get_total_number_of_simulated_tx().await != 0 {
+            if let Some(tx_simulated) = self.get_simulate_tx().await{
+                sink.send(SubscriptionMessage::from_json(&tx_simulated)?).await?;
+            }
+        }
         Ok(())
     }
 }

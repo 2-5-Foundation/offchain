@@ -66,6 +66,6 @@ pub trait Transaction {
     /// This should be a websocket connection to network router server
     /// handling propagating to be simulated and
     /// account control attestation after txn execution ( i.e depositing to the specified acount)
-    #[subscription(name = "receiveConfirmedTx", unsubscribe = "unsubReceiveConfirmedTx", item=Vec<TxSimulationObject>)]
+    #[subscription(name = "receiveConfirmedTx", unsubscribe = "unsubReceiveConfirmedTx", item=TxSimulationObject)]
     async fn receive_confirmed_tx(&self) -> SubscriptionResult;
 }
