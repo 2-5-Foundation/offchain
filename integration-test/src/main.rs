@@ -14,7 +14,9 @@
 
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-use primitives::{TxConfirmationObject, TxObject, VaneMultiAddress};
+use primitives::{
+    BlockchainNetwork, TxConfirmationObject, TxObject, VaneCallData, VaneMultiAddress,
+};
 use sp_core::ecdsa::{Public as ecdsaPublic, Signature as ECDSASignature};
 use sp_core::ed25519::{Public as ed25519Public, Signature as Ed25519Signature};
 use sp_core::sr25519::{
@@ -22,8 +24,9 @@ use sp_core::sr25519::{
 };
 use sp_core::{Pair, H256};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_runtime::{MultiAddress, MultiSignature, MultiSigner};
-use subxt::{OnlineClient, PolkadotConfig};
+use subxt::tx::TxPayload;
+use subxt::utils::{AccountId32, MultiAddress};
+use subxt::{Metadata, OnlineClient, PolkadotConfig};
 use subxt_signer::sr25519::{dev, Keypair};
 #[subxt::subxt(runtime_metadata_path = "polkadot.scale")]
 pub mod polkadot {}
@@ -56,23 +59,43 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-pub struct PolkadotTest;
+pub struct PolkadotTest {
+    pub client: WsClient,
+}
 
 impl PolkadotTest {
-    pub async fn connect() -> WsClient {
+    pub async fn connect() -> PolkadotTest {
         let client = WsClientBuilder::default()
             .build("127.0.0.1:8000")
             .await
             .expect("Failed to initilise Ws");
-        client
+
+        Self { client }
     }
 
     pub async fn send_transaction(
+        &self,
         sender: Keypair,
         receiver: Keypair,
+        amount: u128,
     ) -> anyhow::Result<()> {
-        todo!()
+        // build a transfer keep alive polkadot call
+        let sender_multi: VaneMultiAddress<AccountId32, ()> =
+            VaneMultiAddress::Address32(sender.public_key().0);
+        let receiver_multi: VaneMultiAddress<AccountId32, ()> =
+            VaneMultiAddress::Address32(receiver.public_key().0);
+
+        let vane_call_data = VaneCallData::new(BlockchainNetwork::Polkadot, amount);
+        // use the client to submit the transaction to av layer
+        if self.client.is_connected() {
+            self.client
+                .request(
+                    "submitTransaction",
+                    vec![sender_multi,receiver_multi],
+                )
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn listen_to_incoming_tx(address: MultiAddress<u128, ()>) -> anyhow::Result<()> {
@@ -94,8 +117,6 @@ impl PolkadotTest {
     pub async fn receiver_confirmed_account_ownership() -> anyhow::Result<()> {
         todo!()
     }
-    
-
 }
 
 pub struct SolanaTest;

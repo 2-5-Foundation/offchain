@@ -2,10 +2,11 @@ use crate::traits::*;
 use jsonrpsee::core::{async_trait, SubscriptionResult};
 use jsonrpsee::core::{Error::Custom, RpcResult};
 use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage};
+use parity_scale_codec::alloc::sync::Once;
 use parity_scale_codec::{Decode, Encode};
 use primitives::{
     BlockchainNetwork, ConfirmationStatus, TxConfirmationObject, TxObject, TxSimulationObject,
-    VaneMultiAddress,
+    VaneCallData, VaneMultiAddress,
 };
 use serde_json::Value as JsonValue;
 use sp_core::ecdsa::{Public as ecdsaPublic, Signature as ECDSASignature};
@@ -13,32 +14,49 @@ use sp_core::ed25519::{Public as ed25519Public, Signature as Ed25519Signature};
 use sp_core::sr25519::{Public as sr25519Public, Signature as Sr25519Signature};
 use sp_core::H256;
 use sp_runtime::traits::Verify;
-use sp_runtime::{MultiAddress, MultiSignature, MultiSigner};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     sync::Arc,
 };
+use subxt::utils::{AccountId32, MultiAddress, MultiSignature};
 use tokio::sync::Mutex;
+use tracing_subscriber;
+
+// Tracing setup
+static INIT: Once = Once::new();
+pub fn init_tracing() -> anyhow::Result<()> {
+    // Add test tracing (from sp_tracing::init_for_tests()) but filtering for xcm logs only
+    let vane_subscriber = tracing_subscriber::fmt()
+        .compact()
+        .with_file(true)
+        .with_line_number(true)
+        .with_target(true)
+        .finish();
+
+    tracing::dispatcher::set_global_default(vane_subscriber.into())
+        .expect("Failed to initialise tracer");
+    Ok(())
+}
 
 /// Types for easier code navigation
-pub type MultiId = MultiAddress<u128, ()>;
+pub type MultiId = VaneMultiAddress<AccountId32, ()>;
 /// A mock database storing each address to the transactions each having a key
 /// `address` ===> `multi_id`=====> `Vec<u8>`
 pub struct MockDB {
     // ============================================================================
     // DB_DATA
 
-    // Map of multi_id account to encoded transaction related to the multi_id
-    pub transactions: HashMap<MultiId, Vec<u8>>,
+    // Map of multi_id account to encoded transactions
+    pub transactions: BTreeMap<MultiId, Vec<u8>>,
     // Map of account id per user ( sender | receiver ) to array of multi_id ( indicating pending transactions)
-    pub multi_ids: HashMap<MultiAddress<u128, ()>, Vec<MultiId>>,
+    pub multi_ids: BTreeMap<VaneMultiAddress<AccountId32, ()>, Vec<MultiId>>,
     // Map to store confirmation phase of transactions
     // `multi-id` to `TxConfrimationObject`
-    pub confirmation: HashMap<MultiId, Vec<u8>>,
+    pub confirmation: BTreeMap<MultiId, Vec<u8>>,
     // Store ready to be simulated tx `TxSimulationObject` (queue)
     pub simulation: VecDeque<Vec<u8>>,
     // Record reverted transactions per sender
-    pub reverted_transactions: HashMap<MultiAddress<u128, ()>, Vec<u8>>,
+    pub reverted_transactions: BTreeMap<MultiAddress<AccountId32, ()>, Vec<u8>>,
 
     // ============================================================================
     // METRICS
@@ -58,18 +76,19 @@ impl TransactionHandler {
 
     pub async fn set_transaction_data(
         &self,
-        address: MultiAddress<u128, ()>,
+        address: VaneMultiAddress<AccountId32, ()>,
         multi_id: MultiId,
         data: TxObject,
     ) {
         let mut db = self.db.lock().await;
 
-        let mut inner_db_multi_ids = Vec::<MultiAddress<u128, ()>>::new();
+        let mut inner_db_multi_ids = Vec::<VaneMultiAddress<AccountId32, ()>>::new();
 
         inner_db_multi_ids.push(multi_id.clone());
 
-        db.transactions.insert(address, data.encode());
-        db.multi_ids.insert(multi_id, inner_db_multi_ids);
+        db.transactions.insert(multi_id, data.encode());
+        db.multi_ids.insert(address, inner_db_multi_ids);
+        tracing::info!("recorded tx to the memory db")
     }
 
     pub async fn set_confirmation_transaction_data(
@@ -79,6 +98,7 @@ impl TransactionHandler {
     ) {
         let mut db = self.db.lock().await;
         db.confirmation.insert(multi_id, tx_confirmation.encode());
+        tracing::info!("recorded confirmation tx data to the memory db")
     }
 
     pub async fn get_confirmation_transaction_data(
@@ -98,7 +118,7 @@ impl TransactionHandler {
 
     pub async fn get_pending_multi_ids(
         &self,
-        account: MultiAddress<u128, ()>,
+        account: VaneMultiAddress<AccountId32, ()>,
     ) -> Option<Vec<MultiId>> {
         let db = self.db.lock().await;
         if let Some(multi_ids) = db.multi_ids.get(&account) {
@@ -122,7 +142,8 @@ impl TransactionHandler {
 
     pub async fn propagate_tx(&self, tx_simulate: TxSimulationObject) {
         let mut db = self.db.lock().await;
-        db.simulation.push_front(tx_simulate.encode())
+        db.simulation.push_front(tx_simulate.encode());
+        tracing::info!("recorded simulation tx object to the memory db")
     }
 
     pub async fn get_total_number_of_simulated_tx(&self) -> u32 {
@@ -157,18 +178,18 @@ impl TransactionServer for TransactionHandler {
     /// of the tx data with multi_id being the key
     async fn submit_transaction(
         &self,
-        call: Vec<u8>,
-        sender: VaneMultiAddress<u128, ()>,
-        receiver: VaneMultiAddress<u128, ()>,
+        call_data: VaneCallData,
+        sender: VaneMultiAddress<AccountId32, ()>,
+        receiver: VaneMultiAddress<AccountId32, ()>,
     ) -> RpcResult<()> {
         // construct transaction object
         let tx_object = TxObject::new(
-            call,
+            call_data,
             sender.clone().into(),
             receiver.clone().into(),
             primitives::BlockchainNetwork::Polkadot,
         );
-        println!("submitting transaction and preparing for confirmation phase");
+        tracing::info!("submitting transaction and preparing for confirmation phase");
         // record the tx object to the db
         let multi_id = tx_object.get_multi_id();
         // record for sender
@@ -182,7 +203,7 @@ impl TransactionServer for TransactionHandler {
 
     async fn get_transaction(
         &self,
-        _sender: VaneMultiAddress<u128, ()>,
+        _sender: VaneMultiAddress<AccountId32, ()>,
         _tx_id: Option<Vec<u8>>,
     ) -> RpcResult<Vec<u8>> {
         todo!()
@@ -191,7 +212,7 @@ impl TransactionServer for TransactionHandler {
     async fn subscribe_tx_confirmation(
         &self,
         pending: PendingSubscriptionSink,
-        address: VaneMultiAddress<u128, ()>,
+        address: VaneMultiAddress<AccountId32, ()>,
     ) -> SubscriptionResult {
         let sink = pending.accept().await?;
         let sub_id: JsonValue = sink.subscription_id().into();
@@ -215,7 +236,7 @@ impl TransactionServer for TransactionHandler {
             sink.send(SubscriptionMessage::from_json(&empty_result)?)
                 .await?;
         }
-
+        tracing::info!("subcribed to tx confirmation receiver");
         Ok(())
     }
 
@@ -223,7 +244,7 @@ impl TransactionServer for TransactionHandler {
     async fn subscribe_tx_confirmation_sender(
         &self,
         pending: PendingSubscriptionSink,
-        address: VaneMultiAddress<u128, ()>,
+        address: VaneMultiAddress<AccountId32, ()>,
     ) -> SubscriptionResult {
         let sink = pending.accept().await?;
         let sub_id: JsonValue = sink.subscription_id().into();
@@ -247,14 +268,14 @@ impl TransactionServer for TransactionHandler {
             sink.send(SubscriptionMessage::from_json(&empty_result)?)
                 .await?;
         }
-
+        tracing::info!("subcribed to tx confirmation sender");
         Ok(())
     }
 
     async fn receiver_confirmation(
         &self,
-        address: VaneMultiAddress<u128, ()>,
-        multi_id: VaneMultiAddress<u128, ()>,
+        address: VaneMultiAddress<AccountId32, ()>,
+        multi_id: VaneMultiAddress<AccountId32, ()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()> {
@@ -276,7 +297,7 @@ impl TransactionServer for TransactionHandler {
                     .try_into()
                     .expect("Failed to covert address to bytes");
                 let public_account = sr25519Public::from_h256(H256::from(account_bytes));
-                if sig.verify(&msg[..], &public_account) {
+                if sig.verify(&msg.encode()[..], &public_account) {
                     let mut tx_confirmation_object: TxConfirmationObject = tx.into();
                     // update the confirmation status
                     tx_confirmation_object.update_confirmation_status(
@@ -287,6 +308,7 @@ impl TransactionServer for TransactionHandler {
                     self.set_confirmation_transaction_data(multi_id.into(), tx_confirmation_object)
                         .await
                 };
+                tracing::info!("receiver confirmed");
                 Ok(())
             }
             _ => Err(Custom("Blockchain network not supported".to_string())),
@@ -295,8 +317,8 @@ impl TransactionServer for TransactionHandler {
 
     async fn sender_confirmation(
         &self,
-        address: VaneMultiAddress<u128, ()>,
-        multi_id: VaneMultiAddress<u128, ()>,
+        address: VaneMultiAddress<AccountId32, ()>,
+        multi_id: VaneMultiAddress<AccountId32, ()>,
         signature: Vec<u8>,
         network: BlockchainNetwork,
     ) -> RpcResult<()> {
@@ -320,24 +342,35 @@ impl TransactionServer for TransactionHandler {
                     .try_into()
                     .expect("Failed to covert address to bytes");
                 let public_account = sr25519Public::from_h256(H256::from(account_bytes));
-                if sig.verify(&msg[..], &public_account) {
+                if sig.verify(&msg.encode()[..], &public_account) {
                     tx.update_confirmation_status(ConfirmationStatus::Ready);
                     let tx_simulation_object: TxSimulationObject = tx.into();
                     // store to the ready to be simulated tx storage
                     self.propagate_tx(tx_simulation_object).await;
                 };
+                tracing::info!("sender confirmed");
                 Ok(())
             }
             _ => Err(Custom("Blockchain network not supported".to_string())),
         }
     }
 
+    async fn sender_revert_transaction(
+        &self,
+        address: VaneMultiAddress<AccountId32, ()>,
+        multi_id: VaneMultiAddress<AccountId32, ()>,
+        network: BlockchainNetwork,
+    ) -> RpcResult<()> {
+        todo!()
+    }
+
     async fn receive_confirmed_tx(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
         let sink = pending.accept().await?;
         // fetch the confirmed and ready to be simulated txn
         while self.get_total_number_of_simulated_tx().await != 0 {
-            if let Some(tx_simulated) = self.get_simulate_tx().await{
-                sink.send(SubscriptionMessage::from_json(&tx_simulated)?).await?;
+            if let Some(tx_simulated) = self.get_simulate_tx().await {
+                sink.send(SubscriptionMessage::from_json(&tx_simulated)?)
+                    .await?;
             }
         }
         Ok(())

@@ -1,6 +1,7 @@
 use anyhow::Ok;
 use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
@@ -13,6 +14,8 @@ use handlers::MockDB;
 use handlers::TransactionHandler;
 use tokio::sync::Mutex;
 use traits::TransactionServer;
+
+use crate::handlers::init_tracing;
 
 /// Address Verification layer cli server arguments
 #[derive(Parser, Debug)]
@@ -33,19 +36,20 @@ pub struct ServerProfile {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    init_tracing()?;
     //let args = AvLayerServerCli::parse();
     // Initialise the database
-    let mock_db_transactions = HashMap::new();
-    let mock_db_multi_ids = HashMap::new();
+    let mock_db_transactions = BTreeMap::new();
+    let mock_db_multi_ids = BTreeMap::new();
 
-    let confirmation = HashMap::new();
+    let confirmation = BTreeMap::new();
 
     let rpc_handler = TransactionHandler {
         db: Arc::new(Mutex::new(MockDB {
             transactions: mock_db_transactions,
             multi_ids: mock_db_multi_ids,
             confirmation,
-            reverted_transactions: HashMap::new(),
+            reverted_transactions: BTreeMap::new(),
             simulation: VecDeque::new(),
             subscribed: Vec::new(),
         })),
