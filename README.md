@@ -77,3 +77,46 @@ vane is an offchain & onchain solution.
     - Store cached value for verified , confirmed and attested transaction object
     - Have tokens for incentivizing relayers
     - Wallet partnership revenue integration
+
+### Transaction pipeline
+
+### Potential problems
+
+1. #### Nonce control
+
+    As transactions will be submitted by network router relayer, it is possible that the nonce it holds has already been invalidated by the target network.
+
+    To mitigate this, the transaction will fetch the next valid nonce once it passes all vane checks ( address verification, simulation network execution and reciver deposited account ownership attestation) and once it is at network router relayer a new fresh nonce will be fetched and included in the submitted transaction
+
+---
+
+ ### Product thesis
+
+- There will be one instance of the servers run by vane labs enabling users to connect to
+- vane should compile to wasm to enable embedding the backend with front end app, enabling users to run their own instance for decentralization
+
+
+---
+ ### Network Supported
+
+List of symbols:
+- ✅: means the network is currently supported.
+- 🏗️ means that the network is being actively implemented.
+- ❌ means that the network is currently not supported
+- AV layer - Address Verifcation layer
+
+---
+
+|  Supported networks   | layers                      | Status             |
+|-----------------------| ----------------------------| -------------------|
+|    Polkadot           | AV layer & Simulation layer | ✅ & ❌             |
+|    Kusama             | AV layer & Simulation layer | 🏗️ & ❌             |  
+|    Ethereum           | Av layer & Simulation layer | 🏗️ & ❌             |
+|    Solana             | Av layer & Simulation layer | 🏗️ & ❌             |
+|    BNB                | Av layer & Simulation layer | ❌ & ❌             |
+|    Base               | Av layer & Simulation layer | ❌ & ❌             |
+|    Arbitrum           | Av layer & Simulation layer | ❌ & ❌             |
+|    Optimism           | Av layer & Simulation layer | ❌ & ❌             |
+|    Bitcoin            | Av layer & Simulation layer | ❌ & ❌             |
+|    Sui                | Av layer & Simulation layer | ❌ & ❌             |
+

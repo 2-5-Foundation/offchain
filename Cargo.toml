@@ -1,10 +1,47 @@
-workspace = { members = ["av-layer", "network-relayer-layer", "primitives"] }
-[package]
+[workspace]
+members =["av-layer", "integration-test", "network-router-layer", "primitives"]
+resolver = "2"
+
+[workspace.package]
+authors = [ "MrishoLukamba@vane-labs" ]
 name = "vane-offchain"
 version = "0.1.0"
 edition = "2021"
-
+repository = ""
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-clap = "4.5.3"
+[workspace.dependencies]
+
+#Local
+primitives                                              = { path = "primitives"}
+av-layer                                                = { path = "av-layer"}
+network-router-layer                                    = { path = "network-router-layer"}
+# crates.io
+parity-scale-codec                                      = { version = "3.6.9", default-features = false, features = ["std","derive"] }
+async-trait                                             = "0.1.78"
+clap                                                    = "4.5.3"
+flume                                                   = "0.11.0"
+sp-rpc                                                  = "29.0.0"
+subxt                                                   = "0.35.0"
+tokio                                                   = "1.36.0"
+tower-http                                              = { version = "0.4.0", features = ["full"] }
+tower                                                   = { version = "0.4.13", features = ["full"] }
+jsonrpsee                                               = { version = "0.17", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
+serde                                                   = { version = "1.0.195", features = ["derive"] }
+chrono                                                  = "0.4"
+anyhow                                                  = { version = "1.0.81", default-features = false }
+btree-slab                                              = "0.6.1"
+slab                                                    = "0.4.9"
+sp-application-crypto                                   = "33.0.0"
+frame-support                                           = "31.0.0"
+futures                                                 = "0.3.30"
+sp-runtime                                              = "34.0.0"
+sp-core                                                 = "31.0.0"
+scale-info                                              = { version = "2.11.1", features = ["derive","serde"]}
+serde_json                                              = "1.0.116"
+tracing 									                              = { version = "0.1.37" }
+sp-tracing 									                            = { version = "11.0.0"}
+tracing-subscriber 							                        = { version = "0.3.16", features = ["env-filter", "tracing-log"] }
+# Dev Devependencies
+subxt-cli                                               = "0.35.1"
+subxt-signer                                            = "0.35.1"
