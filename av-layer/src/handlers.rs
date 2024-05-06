@@ -1,12 +1,12 @@
 use crate::traits::*;
+use anyhow::ensure;
 use jsonrpsee::core::{async_trait, SubscriptionResult};
 use jsonrpsee::core::{Error::Custom, RpcResult};
 use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage};
-use parity_scale_codec::alloc::sync::Once;
 use parity_scale_codec::{Decode, Encode};
 use primitives::{
-    BlockchainNetwork, ConfirmationStatus, TxConfirmationObject, TxObject, TxSimulationObject,
-    VaneCallData, VaneMultiAddress,
+    BlockchainNetwork, ConfirmationStatus, MultiId, TxConfirmationObject, TxObject,
+    TxSimulationObject, VaneCallData, VaneMultiAddress,
 };
 use serde_json::Value as JsonValue;
 use sp_core::ecdsa::{Public as ecdsaPublic, Signature as ECDSASignature};
@@ -20,26 +20,7 @@ use std::{
 };
 use subxt::utils::{AccountId32, MultiAddress, MultiSignature};
 use tokio::sync::Mutex;
-use tracing_subscriber;
 
-// Tracing setup
-static INIT: Once = Once::new();
-pub fn init_tracing() -> anyhow::Result<()> {
-    // Add test tracing (from sp_tracing::init_for_tests()) but filtering for xcm logs only
-    let vane_subscriber = tracing_subscriber::fmt()
-        .compact()
-        .with_file(true)
-        .with_line_number(true)
-        .with_target(true)
-        .finish();
-
-    tracing::dispatcher::set_global_default(vane_subscriber.into())
-        .expect("Failed to initialise tracer");
-    Ok(())
-}
-
-/// Types for easier code navigation
-pub type MultiId = VaneMultiAddress<AccountId32, ()>;
 /// A mock database storing each address to the transactions each having a key
 /// `address` ===> `multi_id`=====> `Vec<u8>`
 pub struct MockDB {
@@ -56,7 +37,7 @@ pub struct MockDB {
     // Store ready to be simulated tx `TxSimulationObject` (queue)
     pub simulation: VecDeque<Vec<u8>>,
     // Record reverted transactions per sender
-    pub reverted_transactions: BTreeMap<MultiAddress<AccountId32, ()>, Vec<u8>>,
+    pub reverted_transactions: BTreeMap<VaneMultiAddress<AccountId32, ()>, Vec<u8>>,
 
     // ============================================================================
     // METRICS
@@ -87,8 +68,8 @@ impl TransactionHandler {
         inner_db_multi_ids.push(multi_id.clone());
 
         db.transactions.insert(multi_id, data.encode());
-        db.multi_ids.insert(address, inner_db_multi_ids);
-        tracing::info!("recorded tx to the memory db")
+        db.multi_ids.insert(address.clone(), inner_db_multi_ids);
+        tracing::info!("recorded tx to the memory db for {:?}", address)
     }
 
     pub async fn set_confirmation_transaction_data(
@@ -140,6 +121,20 @@ impl TransactionHandler {
         }
     }
 
+    pub async fn get_reverted_txs(&self) -> Vec<TxConfirmationObject> {
+        let db = self.db.lock().await;
+        let reverted_txs: Vec<TxConfirmationObject> = db
+            .reverted_transactions
+            .values()
+            .into_iter()
+            .map(|tx| {
+                let decoded_tx: TxConfirmationObject = Decode::decode(&mut &tx[..]).expect("hh");
+                decoded_tx
+            })
+            .collect();
+        return reverted_txs;
+    }
+
     pub async fn propagate_tx(&self, tx_simulate: TxSimulationObject) {
         let mut db = self.db.lock().await;
         db.simulation.push_front(tx_simulate.encode());
@@ -162,6 +157,15 @@ impl TransactionHandler {
         }
     }
 
+    pub async fn record_reverted_tx(
+        &self,
+        sender: VaneMultiAddress<AccountId32, ()>,
+        reverted_tx: TxConfirmationObject,
+    ) {
+        let mut db = self.db.lock().await;
+        db.reverted_transactions
+            .insert(sender, reverted_tx.encode());
+    }
     // METRICS
 
     pub async fn record_subscriber(&self, id: JsonValue) {
@@ -209,7 +213,7 @@ impl TransactionServer for TransactionHandler {
         todo!()
     }
 
-    async fn subscribe_tx_confirmation(
+    async fn receiver_subscribe_tx_confirmation(
         &self,
         pending: PendingSubscriptionSink,
         address: VaneMultiAddress<AccountId32, ()>,
@@ -241,7 +245,7 @@ impl TransactionServer for TransactionHandler {
     }
 
     // Subscribe for sender to listen to confirmed tx from the receiver
-    async fn subscribe_tx_confirmation_sender(
+    async fn sender_subscribe_tx_confirmation(
         &self,
         pending: PendingSubscriptionSink,
         address: VaneMultiAddress<AccountId32, ()>,
@@ -288,7 +292,9 @@ impl TransactionServer for TransactionHandler {
                     .ok_or(Custom("Transaction Not Found".to_string()))?;
                 // record the confirmation
 
-                let msg = tx.clone().call;
+                // message to sign for address verification
+                let msg = tx.clone().get_tx_id();
+
                 let sig = Sr25519Signature::from_slice(&signature)
                     .ok_or(Custom("Failed to convert signature sr25519".to_string()))?;
 
@@ -297,13 +303,17 @@ impl TransactionServer for TransactionHandler {
                     .try_into()
                     .expect("Failed to covert address to bytes");
                 let public_account = sr25519Public::from_h256(H256::from(account_bytes));
+
                 if sig.verify(&msg.encode()[..], &public_account) {
                     let mut tx_confirmation_object: TxConfirmationObject = tx.into();
+
+                    // update the confirmed address
+                    tx_confirmation_object.set_confirmed_receiver(address);
+
                     // update the confirmation status
                     tx_confirmation_object.update_confirmation_status(
                         primitives::ConfirmationStatus::WaitingForSender,
                     );
-                    tx_confirmation_object.set_receiver_sig(signature);
                     // store the tx confirmation object
                     self.set_confirmation_transaction_data(multi_id.into(), tx_confirmation_object)
                         .await
@@ -328,12 +338,16 @@ impl TransactionServer for TransactionHandler {
                     .get_confirmation_transaction_data(multi_id.clone().into())
                     .await
                     .ok_or(Custom("Confirmation data unavailable".to_string()))?;
+
                 // check if the if the receiver has confirmed
                 if tx.get_confirmation_status() != ConfirmationStatus::WaitingForSender {
                     return Err(Custom("Wait for receiver to confirm".to_string()));
                 }
                 // verify the signature and the address
-                let msg = tx.clone().call;
+
+                // message to sign for address verification
+                let msg = tx.clone().get_tx_id();
+
                 let sig = Sr25519Signature::from_slice(&signature)
                     .expect("Failed to convert signature sr25519");
 
@@ -342,13 +356,28 @@ impl TransactionServer for TransactionHandler {
                     .try_into()
                     .expect("Failed to covert address to bytes");
                 let public_account = sr25519Public::from_h256(H256::from(account_bytes));
+
                 if sig.verify(&msg.encode()[..], &public_account) {
-                    tx.update_confirmation_status(ConfirmationStatus::Ready);
-                    let tx_simulation_object: TxSimulationObject = tx.into();
-                    // store to the ready to be simulated tx storage
-                    self.propagate_tx(tx_simulation_object).await;
+                    // confirm the resulting multi_id
+                    let multi_id = tx.calculate_confirmed_multi_id(address.clone());
+
+                    if multi_id == tx.get_multi_id() {
+                        tx.set_confirmed_sender(address);
+
+                        tx.update_confirmation_status(ConfirmationStatus::Ready);
+                        let tx_simulation_object: TxSimulationObject = tx.into();
+                        // store to the ready to be simulated tx storage
+                        self.propagate_tx(tx_simulation_object).await;
+                        tracing::info!("sender confirmed");
+                    } else {
+                        // record to reverted tx, as this tx is automatically reverted due to mismatch in address confirmation
+                        tx.update_confirmation_status(ConfirmationStatus::RejectedMismatchAddress);
+
+                        tracing::info!("tx reverted due to mismatched confirmed address");
+                        self.record_reverted_tx(address, tx).await;
+                        Err(Custom("Address Mismatched , Tx reverted".to_string()))?;
+                    }
                 };
-                tracing::info!("sender confirmed");
                 Ok(())
             }
             _ => Err(Custom("Blockchain network not supported".to_string())),
@@ -362,6 +391,14 @@ impl TransactionServer for TransactionHandler {
         network: BlockchainNetwork,
     ) -> RpcResult<()> {
         todo!()
+    }
+
+    async fn subscribe_revert_tx(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+        let sink = pending.accept().await?;
+        let reverted_txs: Vec<TxConfirmationObject> = self.get_reverted_txs().await;
+        let json_reverted_txs = SubscriptionMessage::from_json(&reverted_txs)?;
+        sink.send(json_reverted_txs).await?;
+        Ok(())
     }
 
     async fn receive_confirmed_tx(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {

@@ -28,6 +28,9 @@ use subxt::tx::TxPayload;
 use subxt::utils::{AccountId32, MultiAddress};
 use subxt::{Metadata, OnlineClient, PolkadotConfig};
 use subxt_signer::sr25519::{dev, Keypair};
+use jsonrpsee::rpc_params;
+use clap::Parser;
+
 #[subxt::subxt(runtime_metadata_path = "polkadot.scale")]
 pub mod polkadot {}
 
@@ -35,13 +38,30 @@ pub mod polkadot {}
 // Solana testing
 // Ethereum testing
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct VaneTestCli {
+    /// Name of the server
+    #[arg(short, long)]
+    name: String
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // generate accounts
-    // let alicePair = sr25519Pair::from_string("//Alice", None).expect("Failed to generate key pair");
-    // let bobPair = sr25519Pair::from_string("//Bob", None).expect("Failed to generate key pair");
-    let alice = dev::alice().public_key();
-    //let bob:VaneMultiAddress<u128,u32> = VaneMultiAddress::Address32(dev::bob().public_key().into());
+
+    let args = VaneTestCli::parse();
+
+    if args.name == "polkadot".to_string() {
+        let alice = dev::alice();
+        let bob = dev::bob();
+        let vane_account = ();
+
+        let polkadot_test = PolkadotTest::connect().await;
+
+
+    }
+   
+    
     // construct a transfer tx
     //let transfer_call = polkadot::tx().balances().transfer_keep_alive(bob, 10_000);
     // send to vane av-layer
@@ -66,7 +86,7 @@ pub struct PolkadotTest {
 impl PolkadotTest {
     pub async fn connect() -> PolkadotTest {
         let client = WsClientBuilder::default()
-            .build("127.0.0.1:8000")
+            .build("ws://127.0.0.1:8000")
             .await
             .expect("Failed to initilise Ws");
 
@@ -87,11 +107,12 @@ impl PolkadotTest {
 
         let vane_call_data = VaneCallData::new(BlockchainNetwork::Polkadot, amount);
         // use the client to submit the transaction to av layer
+        //let params = rpc_params!(sender_multi,receiver_multi,vane_call_data);
         if self.client.is_connected() {
             self.client
                 .request(
-                    "submitTransaction",
-                    vec![sender_multi,receiver_multi],
+                    "submit_transaction",
+                    (vane_call_data, sender_multi, receiver_multi),
                 )
                 .await?;
         }

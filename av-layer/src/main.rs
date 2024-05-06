@@ -2,7 +2,6 @@ use anyhow::Ok;
 use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -12,10 +11,10 @@ mod traits;
 
 use handlers::MockDB;
 use handlers::TransactionHandler;
+use parity_scale_codec::alloc::sync::Once;
 use tokio::sync::Mutex;
+use tracing_subscriber;
 use traits::TransactionServer;
-
-use crate::handlers::init_tracing;
 
 /// Address Verification layer cli server arguments
 #[derive(Parser, Debug)]
@@ -34,9 +33,26 @@ pub struct ServerProfile {
     port: u16,
 }
 
+// Tracing setup
+static INIT: Once = Once::new();
+pub fn init_tracing() -> anyhow::Result<()> {
+    // Add test tracing (from sp_tracing::init_for_tests()) but filtering for xcm logs only
+    let vane_subscriber = tracing_subscriber::fmt()
+        .compact()
+        .with_file(true)
+        .with_line_number(true)
+        .with_target(true)
+        .finish();
+
+    tracing::dispatcher::set_global_default(vane_subscriber.into())
+        .expect("Failed to initialise tracer");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_tracing()?;
+    tracing::info!("initiliasing av layer 🔥⚡️");
     //let args = AvLayerServerCli::parse();
     // Initialise the database
     let mock_db_transactions = BTreeMap::new();
@@ -54,7 +70,6 @@ async fn main() -> anyhow::Result<()> {
             subscribed: Vec::new(),
         })),
     };
-    println!("Starting server");
 
     // Initialize the server
     run_rpc_server(rpc_handler, "127.0.0.1:8000".to_owned()).await?;
