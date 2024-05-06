@@ -1,16 +1,21 @@
 pub use common::*;
+use derivative::Derivative;
 use frame_support::StorageHasher;
 use frame_support::Twox64Concat;
+use hex::ToHex;
+use hex_literal::hex;
 use parity_scale_codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use derivative::Derivative;
-use tinyrand::{Rand, StdRand, RandRange};
+use tinyrand::{Rand, RandRange, StdRand};
 pub mod common {
 
     use std::borrow::Cow;
 
     use sp_core::{blake2_128, blake2_256};
-    use subxt::{tx::{DynamicPayload, Payload}, utils::{AccountId32,MultiAddress,MultiSignature}};
+    use subxt::{
+        tx::{DynamicPayload, Payload},
+        utils::{AccountId32, MultiAddress, MultiSignature},
+    };
 
     use super::*;
     /// The transaction object which all operations will be applied upon
@@ -31,6 +36,9 @@ pub mod common {
         pub lifetime_status: LifetimeStatus,
     }
 
+    /// Types for easier code navigation
+    pub type MultiId = VaneMultiAddress<AccountId32, ()>;
+
     impl TxObject {
         pub fn new(
             call: VaneCallData,
@@ -38,11 +46,13 @@ pub mod common {
             receiver_address: MultiAddress<AccountId32, ()>,
             network: BlockchainNetwork,
         ) -> Self {
-            let tx_id = call.get_tx_id();
-            let tx_id = String::from_utf8(tx_id).expect("Failed to convert tx id from bytes");
+            let tx_id_vec = call.get_tx_id();
+            let tx_id_hash = Twox64Concat::hash(&tx_id_vec[..]);
+            let tx_id = hex::encode(tx_id_hash);
 
-            let multi_id = (sender_address.clone(), receiver_address.clone(),b"VANE").using_encoded(blake2_256);
-            let multi_id: MultiAddress<AccountId32, ()> = MultiAddress::Address32(multi_id);
+            let multi_id = (sender_address.clone(), receiver_address.clone(), b"VANE")
+                .using_encoded(blake2_256);
+            let multi_id: VaneMultiAddress<AccountId32, ()> = VaneMultiAddress::Address32(multi_id);
             Self {
                 tx_id,
                 call,
@@ -58,6 +68,10 @@ pub mod common {
         pub fn get_multi_id(&self) -> VaneMultiAddress<AccountId32, ()> {
             self.multi_id.clone().into()
         }
+
+        pub fn get_tx_id(self) -> String {
+            self.tx_id
+        }
     }
 
     /// VaneCallData represents enumeration on different network transaction function types ( Call )
@@ -66,35 +80,32 @@ pub mod common {
     #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize, PartialEq, Eq)]
     pub enum VaneCallData {
         SubstrateCallData {
-            amount: u128
+            amount: u128,
         },
-        SolanaCallData{ 
-            amount:u128,
-            extra_receivers:Vec<VaneMultiAddress<AccountId32,()>>
+        SolanaCallData {
+            amount: u128,
+            extra_receivers: Vec<VaneMultiAddress<AccountId32, ()>>,
         },
-        EthereumCallData{
-            amount: u128
-        }
+        EthereumCallData {
+            amount: u128,
+        },
     }
 
     impl VaneCallData {
-
         pub fn new(network: BlockchainNetwork, amount: u128) -> Self {
             match network {
-                BlockchainNetwork::Polkadot => {
-                    VaneCallData::SubstrateCallData { amount }
-                },
-                _ => todo!()
+                BlockchainNetwork::Polkadot => VaneCallData::SubstrateCallData { amount },
+                _ => todo!(),
             }
         }
 
         pub fn get_tx_id(&self) -> Vec<u8> {
-            match self{
-                VaneCallData::SubstrateCallData{amount} => {
+            match self {
+                VaneCallData::SubstrateCallData { amount } => {
                     let mut rand = StdRand::default();
-                    Twox64Concat::hash(&format!("{}{}",amount, rand.next_u128()).encode()[..])
-               },
-               _ => todo!()
+                    Twox64Concat::hash(&format!("{}{}", amount, rand.next_u128()).encode()[..])
+                }
+                _ => todo!(),
             }
         }
     }
@@ -127,7 +138,8 @@ pub mod common {
         WaitingForSender,
         Ready,
         Accepted,
-        Rejected,
+        RejectedMismatchAddress,
+        RejectedSenderRevert
     }
 
     impl From<TxObject> for TxConfirmationObject {
@@ -135,12 +147,11 @@ pub mod common {
             Self {
                 tx_id: value.tx_id,
                 call: value.call,
-                receiver_sig: None,
-                sender_sig: None,
                 confirmation_status: ConfirmationStatus::WaitingForReceiver,
                 network: value.network,
-                sender_address: value.sender_address.into(),
-                receiver_address: value.receiver_address.into(),
+                confirmed_sender_address: None,
+                confirmed_receiver_address: None,
+                multi_id: value.multi_id,
             }
         }
     }
@@ -160,20 +171,24 @@ pub mod common {
         network: BlockchainNetwork,
     }
 
+    impl TxSimulationObject {
+        pub fn get_tx_id(self) -> String {
+            self.tx_id
+        }
+    }
+
     /// Struct to be sent in the network for confirmation from sender and receiver
     #[derive(Debug, Encode, Decode, Clone, Serialize, Deserialize, PartialEq, Eq)]
     pub struct TxConfirmationObject {
-        sender_address: VaneMultiAddress<AccountId32, ()>,
-        receiver_address: VaneMultiAddress<AccountId32, ()>,
+        confirmed_sender_address: Option<VaneMultiAddress<AccountId32, ()>>,
+        confirmed_receiver_address: Option<VaneMultiAddress<AccountId32, ()>>,
         // Tx hash representation and acting as a link among 3 objects (TxObject, TxSimulation, TxConfirmation)
         tx_id: String,
         pub call: VaneCallData,
         // State of the Tx to be confirmed
         confirmation_status: ConfirmationStatus,
-        // Receiver confirmation signature
-        receiver_sig: Option<Vec<u8>>,
-        // Sender confirmation signature
-        sender_sig: Option<Vec<u8>>,
+        // multi_id
+        multi_id: VaneMultiAddress<AccountId32, ()>,
         // Blockchain network to submit the Tx to
         network: BlockchainNetwork,
     }
@@ -185,8 +200,12 @@ pub mod common {
                 call: value.call,
                 confirmation_status: value.confirmation_status,
                 network: value.network,
-                sender_address: value.sender_address,
-                receiver_address: value.receiver_address,
+                sender_address: value
+                    .confirmed_sender_address
+                    .expect("Failed to unwrap confirmed sender"),
+                receiver_address: value
+                    .confirmed_receiver_address
+                    .expect("Failed to unwrap confirmed receiver"),
             }
         }
     }
@@ -196,16 +215,44 @@ pub mod common {
             self.confirmation_status = status
         }
 
-        pub fn set_receiver_sig(&mut self, receiver_sig: Vec<u8>) {
-            self.receiver_sig = Some(receiver_sig)
+        pub fn set_confirmed_receiver(
+            &mut self,
+            confirmed_receiver: VaneMultiAddress<AccountId32, ()>,
+        ) {
+            self.confirmed_receiver_address = Some(confirmed_receiver)
         }
 
-        pub fn set_sender_sig(&mut self, sender_sig: Vec<u8>) {
-            self.sender_sig = Some(sender_sig)
+        pub fn set_confirmed_sender(
+            &mut self,
+            confirmed_sender: VaneMultiAddress<AccountId32, ()>,
+        ) {
+            self.confirmed_sender_address = Some(confirmed_sender)
         }
 
         pub fn get_confirmation_status(&self) -> ConfirmationStatus {
             self.confirmation_status.clone()
+        }
+
+        pub fn calculate_confirmed_multi_id(
+            &self,
+            sender: VaneMultiAddress<AccountId32, ()>,
+        ) -> MultiId {
+            let receiver = self
+                .confirmed_receiver_address
+                .clone()
+                .expect("Failed to unwrap confirmed receiver");
+
+            let multi_id = (sender, receiver, b"VANE").using_encoded(blake2_256);
+            let multi_id: VaneMultiAddress<AccountId32, ()> = VaneMultiAddress::Address32(multi_id);
+            multi_id
+        }
+
+        pub fn get_multi_id(&self) -> MultiId {
+            self.multi_id.clone()
+        }
+
+        pub fn get_tx_id(self) -> String {
+            self.tx_id
         }
     }
 
@@ -241,7 +288,8 @@ pub mod common {
         serde::Deserialize,
         Debug,
         Hash,
-        PartialOrd, Ord
+        PartialOrd,
+        Ord,
     )]
     #[cfg_attr(feature = "std", derive(Hash))]
     pub enum VaneMultiAddress<AccountId, AccountIndex> {

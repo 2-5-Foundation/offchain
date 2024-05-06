@@ -26,15 +26,15 @@ pub trait Transaction {
 
     /// Subscription to start listening to any upcoming confirmation request
     /// returns `Vec<TxConfirmationObject>` in encoded format
-    #[subscription(name = "subscribeTxConfirmation", item=Vec<Vec<u8>>)]
-    async fn subscribe_tx_confirmation(
+    #[subscription(name = "receiverSubscribeTxConfirmation", unsubscribe= "receiverUnsubscribeTxConfirmation", item=Vec<Vec<u8>>)]
+    async fn receiver_subscribe_tx_confirmation(
         &self,
         address: VaneMultiAddress<AccountId32, ()>,
     ) -> SubscriptionResult;
 
     /// Subscriptiom for sender to listen to incoming confirmed transactions from the receiver
-    #[subscription(name = "subscribeTxConfirmationSender", item=Vec<TxConfirmationObject>)]
-    async fn subscribe_tx_confirmation_sender(
+    #[subscription(name = "senderSubscribeTxConfirmation",unsubscribe= "senderUnsubscribeTxConfirmation", item=Vec<TxConfirmationObject>)]
+    async fn sender_subscribe_tx_confirmation(
         &self,
         address: VaneMultiAddress<AccountId32, ()>,
     ) -> SubscriptionResult;
@@ -68,6 +68,10 @@ pub trait Transaction {
         multi_id: VaneMultiAddress<AccountId32, ()>,
         network: BlockchainNetwork,
     ) -> RpcResult<()>;
+
+    /// Subscribe to reverted transactions
+    #[subscription(name = "subscribeRevertTx",unsubscribe= "unsubscribeRevertTx", item=Vec<TxConfirmationObject>)]
+    async fn subscribe_revert_tx(&self) -> SubscriptionResult;
 
     /// Handling confirmation of transaction from receiver and sender
     /// A websocket connection
